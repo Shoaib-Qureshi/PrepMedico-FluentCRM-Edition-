@@ -222,7 +222,7 @@ class FluentCRM_Edition_Contacts
         }
 
         $results = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT value FROM $table WHERE `key` = %s AND value != '' ORDER BY value ASC",
+            "SELECT DISTINCT value FROM $table WHERE `key` = %s AND value != '' ORDER BY value DESC",
             $course_field
         ));
 
@@ -613,6 +613,7 @@ class FluentCRM_Edition_Contacts
         // Format product name display
         $product_display = '-';
         $order_count_text = '';
+        $total_items = count($product_names);
 
         if (!empty($product_names)) {
             // Truncate product name to 30 characters for better display
@@ -623,10 +624,10 @@ class FluentCRM_Edition_Contacts
 
             $product_display = $first_product;
 
-            // Format order count text for multiple orders
-            if ($order_count > 1) {
-                $additional_orders = $order_count - 1;
-                $order_count_text = '+' . $additional_orders . ' more order' . ($additional_orders > 1 ? 's' : '');
+            // Format item count text for multiple items (across all orders)
+            if ($total_items > 1) {
+                $additional_items = $total_items - 1;
+                $order_count_text = '+' . $additional_items . ' more item' . ($additional_items > 1 ? 's' : '');
             }
         }
 
@@ -636,6 +637,7 @@ class FluentCRM_Edition_Contacts
             'order_total' => $total_amount,
             'order_date' => $most_recent_date,
             'order_count' => $order_count,
+            'total_items' => $total_items,
             'is_asit_member' => $is_asit_member
         ];
     }
