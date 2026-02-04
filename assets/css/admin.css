@@ -492,6 +492,18 @@
     width: 120px;
 }
 
+.fcef-col-phone {
+    width: 130px;
+}
+
+.fcef-col-specialities {
+    width: 150px;
+}
+
+.fcef-col-exam-date {
+    width: 110px;
+}
+
 /* Product Name */
 .fcef-product-wrapper {
     display: flex;
@@ -516,6 +528,21 @@
     padding: 2px 8px;
     border-radius: 4px;
     width: fit-content;
+}
+
+/* Data cell styles */
+.fcef-col-phone-cell,
+.fcef-col-specialities-cell,
+.fcef-col-exam-date-cell {
+    font-size: 13px;
+    color: var(--fc-text-secondary);
+    white-space: nowrap;
+}
+
+.fcef-col-specialities-cell {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Price */
@@ -574,12 +601,59 @@
     transition: color 0.15s;
 }
 
+.fcef-contact-email-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .fcef-contact-email {
     font-size: 13px;
     color: var(--fc-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Copy Email Button */
+.fcef-copy-email {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--fc-border);
+    border-radius: 6px;
+    background: var(--fc-white);
+    color: var(--fc-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.fcef-copy-email:hover {
+    border-color: var(--fc-primary);
+    color: var(--fc-primary);
+    background: var(--fc-primary-light);
+}
+
+.fcef-copy-email.fcef-copied {
+    border-color: var(--fc-success);
+    color: var(--fc-success);
+    background: var(--fc-success-light);
+}
+
+.fcef-copy-email svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Contact cell with copy button */
+.fcef-table td:nth-child(2) {
+    display: flex;
+    align-items: center;
 }
 
 /* ASiT Member Badge */

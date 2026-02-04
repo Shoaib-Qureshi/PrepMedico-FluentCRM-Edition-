@@ -23,17 +23,89 @@
             $('#fcef-reset-btn').on('click', this.reset.bind(this));
             $('#fcef-select-all').on('change', this.toggleSelectAll.bind(this));
             $(document).on('click', '.fcef-edition-item[data-course][data-edition]', this.onStatClick.bind(this));
-            
-            // Make table rows clickable (but not checkbox)
+            $('#fcef-export-btn').on('click', this.exportContacts.bind(this));
+
+            // Copy email button
+            $(document).on('click', '.fcef-copy-email', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var email = $(this).data('email');
+                FCEF.copyToClipboard(email, $(this));
+            });
+
+            // Make table rows clickable (but not checkbox and copy button)
             $(document).on('click', '.fcef-table tbody tr', function(e) {
-                // Don't trigger if clicking checkbox
-                if ($(e.target).is('input[type="checkbox"]')) return;
-                
+                // Don't trigger if clicking checkbox or copy button
+                if ($(e.target).is('input[type="checkbox"]') || $(e.target).closest('.fcef-copy-email').length) return;
+
                 var link = $(this).find('.fcef-contact-link').attr('href');
                 if (link) {
                     window.open(link, '_blank');
                 }
             });
+        },
+
+        copyToClipboard: function(text, $btn) {
+            navigator.clipboard.writeText(text).then(function() {
+                var originalHtml = $btn.html();
+                $btn.html('<svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>');
+                $btn.addClass('fcef-copied');
+                setTimeout(function() {
+                    $btn.html(originalHtml);
+                    $btn.removeClass('fcef-copied');
+                }, 1500);
+            });
+        },
+
+        exportContacts: function() {
+            if (!this.currentCourse || !this.currentEdition) return;
+
+            this.showLoading();
+
+            $.ajax({
+                url: fcefData.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'fcef_export_contacts',
+                    nonce: fcefData.nonce,
+                    course: this.currentCourse,
+                    edition: this.currentEdition
+                },
+                success: function(response) {
+                    FCEF.hideLoading();
+
+                    if (response.success) {
+                        FCEF.downloadCSV(response.data.csv_data, response.data.filename);
+                    }
+                },
+                error: function() {
+                    FCEF.hideLoading();
+                    alert('Export failed. Please try again.');
+                }
+            });
+        },
+
+        downloadCSV: function(data, filename) {
+            var csv = data.map(function(row) {
+                return row.map(function(cell) {
+                    // Escape quotes and wrap in quotes if contains comma or quote
+                    var escaped = String(cell || '').replace(/"/g, '""');
+                    if (escaped.indexOf(',') !== -1 || escaped.indexOf('"') !== -1 || escaped.indexOf('\n') !== -1) {
+                        escaped = '"' + escaped + '"';
+                    }
+                    return escaped;
+                }).join(',');
+            }).join('\n');
+
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            var link = document.createElement('a');
+            var url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         },
         
         showLoading: function() {
@@ -170,7 +242,7 @@
             
             if (data.contacts.length === 0) {
                 $tbody.html(
-                    '<tr><td colspan="7" class="fcef-empty-state">' +
+                    '<tr><td colspan="10" class="fcef-empty-state">' +
                     '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>' +
                     '<p>No contacts found for this edition</p>' +
                     '</td></tr>'
@@ -186,6 +258,9 @@
                 var productName = contact.product_name || '-';
                 var orderCountText = contact.order_count_text || '';
                 var orderTotal = contact.order_total ? fcefData.currency + FCEF.formatNumber(contact.order_total, 2) : '-';
+                var phone = contact.phone || '-';
+                var specialities = contact.specialities || '-';
+                var examDate = contact.exam_date || '-';
 
                 var row = '<tr data-id="' + contact.id + '">';
                 row += '<td><input type="checkbox" class="fcef-contact-cb" value="' + contact.id + '"></td>';
@@ -194,18 +269,27 @@
                 row += '<div class="fcef-avatar">' + initials + '</div>';
                 row += '<div class="fcef-contact-info">';
                 row += '<div class="fcef-contact-name">' + FCEF.escapeHtml(fullName) + '</div>';
-                row += '<div class="fcef-contact-email">' + FCEF.escapeHtml(contact.email) + '</div>';
+                row += '<div class="fcef-contact-email-row">';
+                row += '<span class="fcef-contact-email">' + FCEF.escapeHtml(contact.email) + '</span>';
+                row += '</div>';
                 // ASiT Member badge
                 if (contact.is_asit_member) {
                     row += '<span class="fcef-asit-badge">ASiT Member</span>';
                 }
                 row += '</div>';
                 row += '</a>';
+                // Copy email button (outside the link)
+                row += '<button type="button" class="fcef-copy-email" data-email="' + FCEF.escapeHtml(contact.email) + '" title="Copy email">';
+                row += '<svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/></svg>';
+                row += '</button>';
                 row += '</td>';
+
+                // Phone column
+                row += '<td class="fcef-col-phone-cell">' + FCEF.escapeHtml(phone) + '</td>';
 
                 // ========== COURSE/PRODUCT NAME COLUMN ==========
                 // To hide this column, comment out the next line and also comment out
-                // the <th class="fcef-col-course"> in fluentcrm-edition-contacts.php (around line 661)
+                // the <th class="fcef-col-course"> in fluentcrm-edition-contacts.php
                 row += '<td><div class="fcef-product-wrapper">';
                 row += '<span class="fcef-product-name">' + FCEF.escapeHtml(productName) + '</span>';
                 if (orderCountText) {
@@ -217,6 +301,13 @@
                 // Price column
                 row += '<td><span class="fcef-price">' + orderTotal + '</span></td>';
                 row += '<td><span class="fcef-badge fcef-badge-primary">' + FCEF.escapeHtml(contact.edition) + '</span></td>';
+
+                // Specialities column
+                row += '<td class="fcef-col-specialities-cell">' + FCEF.escapeHtml(specialities) + '</td>';
+
+                // Exam Date column
+                row += '<td class="fcef-col-exam-date-cell">' + FCEF.escapeHtml(examDate) + '</td>';
+
                 row += '<td><span class="fcef-status fcef-status-' + contact.status + '">' + contact.status + '</span></td>';
                 row += '<td style="color: var(--fc-text-secondary); font-size: 13px;">' + FCEF.formatDate(contact.created_at) + '</td>';
                 row += '</tr>';

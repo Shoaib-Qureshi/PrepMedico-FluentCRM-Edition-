@@ -10,6 +10,10 @@ A WordPress plugin that adds a "Contacts by Edition" page to FluentCRM, allowing
 - **Library Subscription Support**: Special handling for library subscriptions via FluentCRM tags
 - **Multiple Order Support**: Shows all orders for contacts with multiple purchases
 - **Revenue Statistics**: View total revenue, order count, and average order value per edition
+- **Export to CSV**: Export filtered contacts to CSV file with all data fields
+- **Copy Email Button**: Quick copy-to-clipboard for contact emails
+- **Phone Number Display**: Shows phone from FluentCRM or WooCommerce billing
+- **Custom Order Meta Fields**: Displays Specialities, Exam Date, and Date of Birth from orders
 - **Responsive Design**: Works on desktop and mobile devices
 - **HPOS Compatible**: Supports WooCommerce High-Performance Order Storage
 
@@ -74,10 +78,14 @@ If no exact match is found, a fallback search looks for any orders with the cate
 
 | Column | Description |
 |--------|-------------|
-| Contact | Name, email, and ASiT member badge |
-| Course | Product name (truncated to 30 chars) + order count |
+| Contact | Name, email (with copy button), and ASiT member badge |
+| Phone | Phone number from FluentCRM or WooCommerce billing |
+| Course | Product name (truncated to 30 chars) + item count |
 | Price | Total amount from all orders |
 | Edition | The edition value from FluentCRM |
+| Specialities | From WooCommerce order meta `billing_specialities` |
+| Exam Date | From WooCommerce order meta `billing_exam_date` |
+| DOB | Date of birth from WooCommerce order meta `billing_dob` |
 | Status | FluentCRM subscription status |
 | Added | Date contact was added to FluentCRM |
 
@@ -178,6 +186,15 @@ fluentcrm-edition-contacts/
 ```
 
 ## Changelog
+
+### Version 1.4.0
+- Added Export to CSV functionality
+- Added Phone number column (from FluentCRM or WooCommerce billing)
+- Added Copy email button with visual feedback
+- Added Specialities column (`billing_specialities` order meta)
+- Added Exam Date column (`billing_exam_date` order meta)
+- Added Date of Birth column (`billing_dob` order meta)
+- Improved table layout with new columns
 
 ### Version 1.3.0
 - Added ASiT Member badge detection

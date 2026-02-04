@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('FCEF_VERSION', '1.3.0');
+define('FCEF_VERSION', '1.4.0');
 define('FCEF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('FCEF_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -102,6 +102,7 @@ class FluentCRM_Edition_Contacts
         add_action('wp_ajax_fcef_filter_contacts', [$this, 'ajax_filter_contacts']);
         add_action('wp_ajax_fcef_get_all_editions', [$this, 'ajax_get_all_editions']);
         add_action('wp_ajax_fcef_get_stats', [$this, 'ajax_get_stats']);
+        add_action('wp_ajax_fcef_export_contacts', [$this, 'ajax_export_contacts']);
     }
 
     public function fluentcrm_missing_notice()
@@ -227,6 +228,58 @@ class FluentCRM_Edition_Contacts
         ));
 
         return $results ? $results : [];
+    }
+
+    /**
+     * Get contact phone number from FluentCRM or WooCommerce
+     */
+    private function get_contact_phone($subscriber_id)
+    {
+        global $wpdb;
+
+        // First try FluentCRM subscriber phone
+        $subscribers_table = $wpdb->prefix . 'fc_subscribers';
+        $phone = $wpdb->get_var($wpdb->prepare(
+            "SELECT phone FROM $subscribers_table WHERE id = %d",
+            $subscriber_id
+        ));
+
+        if (!empty($phone)) {
+            return $phone;
+        }
+
+        // If no phone in FluentCRM, try to get from WooCommerce billing
+        $email = $wpdb->get_var($wpdb->prepare(
+            "SELECT email FROM $subscribers_table WHERE id = %d",
+            $subscriber_id
+        ));
+
+        if (!empty($email) && class_exists('WooCommerce')) {
+            // Check for HPOS
+            if (
+                class_exists('\Automattic\WooCommerce\Utilities\OrderUtil') &&
+                \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled()
+            ) {
+                $orders_table = $wpdb->prefix . 'wc_orders';
+                $phone = $wpdb->get_var($wpdb->prepare(
+                    "SELECT billing_phone FROM $orders_table WHERE billing_email = %s AND billing_phone != '' ORDER BY date_created_gmt DESC LIMIT 1",
+                    $email
+                ));
+            } else {
+                $phone = $wpdb->get_var($wpdb->prepare(
+                    "SELECT pm.meta_value FROM {$wpdb->postmeta} pm
+                     INNER JOIN {$wpdb->postmeta} pm_email ON pm.post_id = pm_email.post_id
+                     INNER JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+                     WHERE pm_email.meta_key = '_billing_email' AND pm_email.meta_value = %s
+                     AND pm.meta_key = '_billing_phone' AND pm.meta_value != ''
+                     AND p.post_type = 'shop_order'
+                     ORDER BY p.post_date DESC LIMIT 1",
+                    $email
+                ));
+            }
+        }
+
+        return $phone ?: '';
     }
 
     /**
@@ -406,8 +459,11 @@ class FluentCRM_Edition_Contacts
         // Get course category for order lookup
         $category = self::$courses[$course_field]['category'] ?? '';
 
-        // Enrich contacts with order data
+        // Enrich contacts with order data and phone
         foreach ($contacts as &$contact) {
+            // Get phone number from FluentCRM subscriber
+            $contact->phone = $this->get_contact_phone($contact->id);
+
             $order_data = $this->get_contact_order_data($contact->email, $category, $edition_value);
             $contact->product_name = $order_data['product_name'];
             $contact->order_count_text = $order_data['order_count_text'] ?? '';
@@ -415,6 +471,12 @@ class FluentCRM_Edition_Contacts
             $contact->order_date = $order_data['order_date'];
             $contact->order_count = $order_data['order_count'] ?? 0;
             $contact->is_asit_member = $order_data['is_asit_member'] ?? false;
+            $contact->asit_number = $order_data['asit_number'] ?? '';
+            $contact->all_product_names = $order_data['all_product_names'] ?? '';
+
+            // WooCommerce order meta fields
+            $contact->specialities = $order_data['specialities'] ?? '';
+            $contact->exam_date = $order_data['exam_date'] ?? '';
         }
 
         return [
@@ -439,7 +501,12 @@ class FluentCRM_Edition_Contacts
             'order_total' => 0,
             'order_date' => null,
             'order_count' => 0,
-            'is_asit_member' => false
+            'is_asit_member' => false,
+            'asit_number' => '',
+            'all_product_names' => '',
+            'specialities' => '',
+            'exam_date' => '',
+            'dob' => ''
         ];
 
         if (!class_exists('WooCommerce') || empty($category)) {
@@ -575,6 +642,12 @@ class FluentCRM_Edition_Contacts
         $most_recent_date = null;
         $order_count = count($orders);
         $is_asit_member = false;
+        $asit_number = '';
+
+        // WooCommerce order meta fields (get from most recent order)
+        $specialities = '';
+        $exam_date = '';
+        $dob = '';
 
         foreach ($orders as $order) {
             $order_id = isset($order->id) ? $order->id : $order->ID;
@@ -599,12 +672,33 @@ class FluentCRM_Edition_Contacts
 
                 // Check if ASiT membership number exists on this order
                 if (!$is_asit_member) {
-                    $asit_number = $wc_order->get_meta('_asit_membership_number');
-                    if (empty($asit_number)) {
-                        $asit_number = $wc_order->get_meta('_wcem_asit_number');
+                    $found_asit_number = $wc_order->get_meta('_asit_membership_number');
+                    if (empty($found_asit_number)) {
+                        $found_asit_number = $wc_order->get_meta('_wcem_asit_number');
                     }
-                    if (!empty($asit_number)) {
+                    if (!empty($found_asit_number)) {
                         $is_asit_member = true;
+                        $asit_number = $found_asit_number;
+                    }
+                }
+
+                // Get additional order meta fields (from most recent order with data)
+                if (empty($specialities)) {
+                    $specialities = $wc_order->get_meta('billing_specialities');
+                    if (empty($specialities)) {
+                        $specialities = $wc_order->get_meta('_billing_specialities');
+                    }
+                }
+                if (empty($exam_date)) {
+                    $exam_date = $wc_order->get_meta('billing_exam_date');
+                    if (empty($exam_date)) {
+                        $exam_date = $wc_order->get_meta('_billing_exam_date');
+                    }
+                }
+                if (empty($dob)) {
+                    $dob = $wc_order->get_meta('billing_dob');
+                    if (empty($dob)) {
+                        $dob = $wc_order->get_meta('_billing_dob');
                     }
                 }
             }
@@ -638,7 +732,12 @@ class FluentCRM_Edition_Contacts
             'order_date' => $most_recent_date,
             'order_count' => $order_count,
             'total_items' => $total_items,
-            'is_asit_member' => $is_asit_member
+            'is_asit_member' => $is_asit_member,
+            'asit_number' => $asit_number,
+            'all_product_names' => implode(', ', $product_names),
+            'specialities' => $specialities,
+            'exam_date' => $exam_date,
+            'dob' => $dob
         ];
     }
 
@@ -923,6 +1022,74 @@ class FluentCRM_Edition_Contacts
     }
 
     /**
+     * AJAX: Export contacts to CSV
+     */
+    public function ajax_export_contacts()
+    {
+        check_ajax_referer('fcef_nonce', 'nonce');
+
+        $course_field = sanitize_text_field($_POST['course'] ?? '');
+        $edition_value = sanitize_text_field($_POST['edition'] ?? '');
+
+        if (empty($course_field) || !isset(self::$courses[$course_field])) {
+            wp_send_json_error(['message' => 'Invalid course']);
+        }
+
+        if (empty($edition_value)) {
+            wp_send_json_error(['message' => 'Please select an edition']);
+        }
+
+        // Get all contacts without pagination
+        $result = $this->get_contacts_by_edition($course_field, $edition_value, 1, 10000);
+        $contacts = $result['contacts'];
+
+        // Build CSV data
+        $csv_data = [];
+
+        // Header row
+        $csv_data[] = [
+            'Name',
+            'Email',
+            'Phone',
+            'Course',
+            'Price',
+            'Edition',
+            'Status',
+            'Specialities',
+            'Exam Date',
+            'ASiT Member No.',
+            'Added Date'
+        ];
+
+        // Data rows
+        foreach ($contacts as $contact) {
+            $full_name = trim(($contact->first_name ?? '') . ' ' . ($contact->last_name ?? ''));
+            if (empty($full_name)) {
+                $full_name = 'No Name';
+            }
+
+            $csv_data[] = [
+                $full_name,
+                $contact->email ?? '',
+                $contact->phone ?? '',
+                $contact->all_product_names ?? ($contact->product_name ?? '-'),
+                $contact->order_total ? number_format($contact->order_total, 2) : '0.00',
+                $contact->edition ?? '',
+                $contact->status ?? '',
+                $contact->specialities ?? '',
+                $contact->exam_date ?? '',
+                $contact->asit_number ?? '',
+                $contact->created_at ? date('Y-m-d', strtotime($contact->created_at)) : ''
+            ];
+        }
+
+        wp_send_json_success([
+            'csv_data' => $csv_data,
+            'filename' => sanitize_file_name(self::$courses[$course_field]['label'] . '-' . $edition_value . '-contacts.csv')
+        ]);
+    }
+
+    /**
      * Render page
      */
     public function render_page()
@@ -1009,6 +1176,12 @@ class FluentCRM_Edition_Contacts
                         <h2 id="fcef-results-title"><?php _e('Contacts', 'fluentcrm-edition-contacts'); ?></h2>
                         <span class="fcef-badge fcef-badge-primary" id="fcef-results-count">0 contacts</span>
                     </div>
+                    <button type="button" id="fcef-export-btn" class="fcef-btn fcef-btn-outline">
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                        <?php _e('Export CSV', 'fluentcrm-edition-contacts'); ?>
+                    </button>
                 </div>
 
                 <div class="fcef-table-container">
@@ -1017,16 +1190,19 @@ class FluentCRM_Edition_Contacts
                             <tr>
                                 <th class="fcef-col-checkbox"><input type="checkbox" id="fcef-select-all"></th>
                                 <th class="fcef-col-contact"><?php _e('Contact', 'fluentcrm-edition-contacts'); ?></th>
+                                <th class="fcef-col-phone"><?php _e('Phone', 'fluentcrm-edition-contacts'); ?></th>
                                 <?php
                                 // ========== COURSE/PRODUCT NAME COLUMN ==========
                                 // To hide this column, comment out the next line and also comment out
                                 // the corresponding row in assets/js/admin.js (around line 203)
                                 ?>
                                 <th class="fcef-col-course"><?php _e('Course', 'fluentcrm-edition-contacts'); ?></th>
-                                <?php // ================================================ 
+                                <?php // ================================================
                                 ?>
                                 <th class="fcef-col-price"><?php _e('Price', 'fluentcrm-edition-contacts'); ?></th>
                                 <th class="fcef-col-edition"><?php _e('Edition', 'fluentcrm-edition-contacts'); ?></th>
+                                <th class="fcef-col-specialities"><?php _e('Specialities', 'fluentcrm-edition-contacts'); ?></th>
+                                <th class="fcef-col-exam-date"><?php _e('Exam Date', 'fluentcrm-edition-contacts'); ?></th>
                                 <th class="fcef-col-status"><?php _e('Status', 'fluentcrm-edition-contacts'); ?></th>
                                 <th class="fcef-col-date"><?php _e('Added', 'fluentcrm-edition-contacts'); ?></th>
                             </tr>
