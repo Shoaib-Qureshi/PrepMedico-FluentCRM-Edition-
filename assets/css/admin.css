@@ -892,8 +892,12 @@
     transform: translateY(-50%);
     width: 16px;
     height: 16px;
+    max-width: 16px;
+    max-height: 16px;
     color: var(--fc-text-secondary);
     pointer-events: none;
+    display: block;
+    flex: 0 0 16px;
 }
 
 .fcef-pb-search {

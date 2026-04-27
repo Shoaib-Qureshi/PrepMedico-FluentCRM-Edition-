@@ -3,7 +3,7 @@
 /**
  * Plugin Name: FluentCRM Edition Contacts
  * Description: Browse and filter FluentCRM contacts by course edition. Adds "Contacts by Edition" to FluentCRM navigation. Courses are configurable via WooCommerce > Settings > Edition Contacts.
- * Version: 1.4.0
+ * Version: 1.4.2
  * Author: Shoaib Qureshi
  * Text Domain: fluentcrm-edition-contacts
  * Requires at least: 5.8
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('FCEF_VERSION', '1.4.0');
+define('FCEF_VERSION', '1.4.2');
 define('FCEF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('FCEF_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('FCEF_OPTION_KEY', 'fcef_courses_config');
@@ -1519,7 +1519,7 @@ class FluentCRM_Edition_Contacts
                             </div>
                             <div class="fcef-pb-header-right">
                                 <div class="fcef-pb-search-wrap">
-                                    <svg class="fcef-pb-search-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
+                                    <svg class="fcef-pb-search-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
                                     <input type="text" id="fcef-pb-search" class="fcef-pb-search" placeholder="<?php _e('Search courses...', 'fluentcrm-edition-contacts'); ?>">
                                 </div>
                             </div>

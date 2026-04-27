@@ -16,6 +16,8 @@ class FCEF_WC_Settings
     const TAB_ID = 'fcef_courses';
 
     private static $row_index = -1;
+    private static $field_options = null;
+    private static $category_options = null;
 
     public static function init()
     {
@@ -44,6 +46,16 @@ class FCEF_WC_Settings
         wp_register_style('fcef-wc-settings', false);
         wp_enqueue_style('fcef-wc-settings');
         wp_add_inline_style('fcef-wc-settings', self::get_inline_css());
+
+        if (wp_script_is('selectWoo', 'registered')) {
+            wp_enqueue_script('selectWoo');
+        }
+
+        if (wp_style_is('select2', 'registered')) {
+            wp_enqueue_style('select2');
+        } elseif (wp_style_is('selectWoo', 'registered')) {
+            wp_enqueue_style('selectWoo');
+        }
 
         wp_register_script('fcef-wc-settings', '', ['jquery'], FCEF_VERSION, true);
         wp_enqueue_script('fcef-wc-settings');
@@ -143,13 +155,23 @@ class FCEF_WC_Settings
         $label = $course['label'] ?? '';
         $name = $course['name'] ?? '';
         $category = $course['category'] ?? '';
+        $field_options = self::get_field_options();
+        $category_options = self::get_category_options();
         ?>
         <tr class="fcef-course-row<?php echo $is_template ? ' fcef-template-row' : ''; ?>">
             <td class="fcef-col-handle">
                 <span class="dashicons dashicons-menu" title="<?php esc_attr_e('Drag to reorder', 'fluentcrm-edition-contacts'); ?>"></span>
             </td>
             <td>
-                <input type="text" name="fcef_courses[<?php echo esc_attr($index); ?>][field]" value="<?php echo esc_attr($field); ?>" class="regular-text fcef-input-field" placeholder="frcophth_p1_edition" <?php disabled($is_template); ?> />
+                <select name="fcef_courses[<?php echo esc_attr($index); ?>][field]" class="regular-text fcef-input-field fcef-search-select fcef-field-select" data-placeholder="<?php esc_attr_e('Search or add a FluentCRM field key', 'fluentcrm-edition-contacts'); ?>" <?php disabled($is_template); ?>>
+                    <option value=""></option>
+                    <?php if ($field !== '' && !isset($field_options[$field])): ?>
+                        <option value="<?php echo esc_attr($field); ?>" selected><?php echo esc_html($field); ?></option>
+                    <?php endif; ?>
+                    <?php foreach ($field_options as $field_key => $field_label): ?>
+                        <option value="<?php echo esc_attr($field_key); ?>" <?php selected($field, $field_key); ?>><?php echo esc_html($field_label); ?></option>
+                    <?php endforeach; ?>
+                </select>
             </td>
             <td>
                 <input type="text" name="fcef_courses[<?php echo esc_attr($index); ?>][label]" value="<?php echo esc_attr($label); ?>" class="regular-text" placeholder="FRCOphth Part 1" <?php disabled($is_template); ?> />
@@ -158,7 +180,15 @@ class FCEF_WC_Settings
                 <input type="text" name="fcef_courses[<?php echo esc_attr($index); ?>][name]" value="<?php echo esc_attr($name); ?>" class="regular-text" placeholder="<?php esc_attr_e('Optional, defaults to label', 'fluentcrm-edition-contacts'); ?>" <?php disabled($is_template); ?> />
             </td>
             <td>
-                <input type="text" name="fcef_courses[<?php echo esc_attr($index); ?>][category]" value="<?php echo esc_attr($category); ?>" class="regular-text fcef-input-category" placeholder="frcophth-part-1" <?php disabled($is_template); ?> />
+                <select name="fcef_courses[<?php echo esc_attr($index); ?>][category]" class="regular-text fcef-input-category fcef-search-select fcef-category-select" data-placeholder="<?php esc_attr_e('Search WooCommerce categories', 'fluentcrm-edition-contacts'); ?>" <?php disabled($is_template); ?>>
+                    <option value=""></option>
+                    <?php if ($category !== '' && !isset($category_options[$category])): ?>
+                        <option value="<?php echo esc_attr($category); ?>" selected><?php echo esc_html(sprintf(__('%s (saved category)', 'fluentcrm-edition-contacts'), $category)); ?></option>
+                    <?php endif; ?>
+                    <?php foreach ($category_options as $category_slug => $category_label): ?>
+                        <option value="<?php echo esc_attr($category_slug); ?>" <?php selected($category, $category_slug); ?>><?php echo esc_html($category_label); ?></option>
+                    <?php endforeach; ?>
+                </select>
             </td>
             <td class="fcef-col-actions">
                 <button type="button" class="button button-link-delete fcef-remove-row">
@@ -167,6 +197,76 @@ class FCEF_WC_Settings
             </td>
         </tr>
         <?php
+    }
+
+    private static function get_field_options()
+    {
+        if (self::$field_options !== null) {
+            return self::$field_options;
+        }
+
+        global $wpdb;
+
+        $options = [];
+        $courses = get_option(FCEF_OPTION_KEY, []);
+
+        if (is_array($courses)) {
+            foreach ($courses as $field => $course) {
+                if ($field !== '') {
+                    $options[$field] = $field;
+                }
+            }
+        }
+
+        $table = $wpdb->prefix . 'fc_subscriber_meta';
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) === $table) {
+            $keys = $wpdb->get_col(
+                "SELECT DISTINCT `key`
+                 FROM {$table}
+                 WHERE `key` != ''
+                 ORDER BY `key` ASC"
+            );
+
+            foreach ($keys as $key) {
+                $key = sanitize_key($key);
+                if ($key !== '') {
+                    $options[$key] = $key;
+                }
+            }
+        }
+
+        natcasesort($options);
+        self::$field_options = $options;
+
+        return self::$field_options;
+    }
+
+    private static function get_category_options()
+    {
+        if (self::$category_options !== null) {
+            return self::$category_options;
+        }
+
+        $options = [];
+
+        if (taxonomy_exists('product_cat')) {
+            $terms = get_terms([
+                'taxonomy' => 'product_cat',
+                'hide_empty' => false,
+                'orderby' => 'name',
+                'order' => 'ASC',
+            ]);
+
+            if (!is_wp_error($terms)) {
+                foreach ($terms as $term) {
+                    $options[$term->slug] = sprintf('%s (%s)', $term->name, $term->slug);
+                }
+            }
+        }
+
+        self::$category_options = $options;
+
+        return self::$category_options;
     }
 
     private static function next_index()
@@ -284,7 +384,12 @@ class FCEF_WC_Settings
         .fcef-courses-table .required { color: #d63638; }
         .fcef-courses-table .fcef-col-handle { width: 30px; text-align: center; cursor: move; color: #8c8f94; }
         .fcef-courses-table .fcef-col-actions { width: 90px; text-align: right; }
-        .fcef-courses-table input[type="text"] { width: 100%; }
+        .fcef-courses-table input[type="text"],
+        .fcef-courses-table select { width: 100%; max-width: 100%; }
+        .fcef-courses-table .select2-container,
+        .fcef-courses-table .selectWoo-container { width: 100% !important; max-width: 100%; }
+        .fcef-courses-table .select2-selection,
+        .fcef-courses-table .selectWoo-selection { min-height: 34px; }
         .fcef-courses-table .fcef-template-row { display: none; }
         .fcef-add-row-wrap { margin: 16px 0; }
         .fcef-add-row-wrap .button .dashicons { margin-right: 4px; }
@@ -299,6 +404,58 @@ class FCEF_WC_Settings
             var $body = $('#fcef-courses-body');
             var $template = $('#fcef-row-template');
 
+            function initSearchSelects($context) {
+                if (!$.fn.selectWoo) {
+                    return;
+                }
+
+                $context.find('.fcef-field-select').each(function() {
+                    var $select = $(this);
+                    if ($select.data('select2')) {
+                        return;
+                    }
+
+                    $select.selectWoo({
+                        width: '100%',
+                        placeholder: $select.data('placeholder') || 'Search or add a field key',
+                        allowClear: true,
+                        tags: true,
+                        createTag: function(params) {
+                            var term = $.trim(params.term);
+                            if (!term) {
+                                return null;
+                            }
+
+                            term = term.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+                            if (!term) {
+                                return null;
+                            }
+
+                            return {
+                                id: term,
+                                text: term,
+                                newTag: true
+                            };
+                        }
+                    });
+                });
+
+                $context.find('.fcef-category-select').each(function() {
+                    var $select = $(this);
+                    if ($select.data('select2')) {
+                        return;
+                    }
+
+                    $select.selectWoo({
+                        width: '100%',
+                        placeholder: $select.data('placeholder') || 'Search WooCommerce categories',
+                        allowClear: true
+                    });
+                });
+            }
+
+            initSearchSelects($(document));
+
             $('#fcef-add-course').on('click', function(e) {
                 e.preventDefault();
                 if (!$template.length) return;
@@ -306,9 +463,10 @@ class FCEF_WC_Settings
                 var html = $template.html();
                 var $newRow = $('<tbody>').html(html).find('tr.fcef-course-row');
                 $newRow.removeClass('fcef-template-row');
-                $newRow.find('input').prop('disabled', false).val('');
+                $newRow.find('input, select').prop('disabled', false).val('');
                 $body.append($newRow);
-                $newRow.find('input').first().focus();
+                initSearchSelects($newRow);
+                $newRow.find('select, input').first().focus();
             });
 
             $body.on('click', '.fcef-remove-row', function(e) {
@@ -317,7 +475,7 @@ class FCEF_WC_Settings
                 var visibleRows = $body.find('tr.fcef-course-row:not(.fcef-template-row)').length;
 
                 if (visibleRows <= 1) {
-                    $row.find('input').val('');
+                    $row.find('input, select').val('').trigger('change');
                     return;
                 }
 
@@ -327,7 +485,7 @@ class FCEF_WC_Settings
 
             $('#fcef-settings-form').on('submit', function() {
                 $body.find('tr.fcef-course-row:not(.fcef-template-row):not(.fcef-row-removing)').each(function(i) {
-                    $(this).find('input').each(function() {
+                    $(this).find('input, select').each(function() {
                         var name = $(this).attr('name') || '';
                         name = name.replace(/fcef_courses\[[^\]]*\]/, 'fcef_courses[' + i + ']');
                         $(this).attr('name', name);
