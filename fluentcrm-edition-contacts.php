@@ -2,8 +2,8 @@
 
 /**
  * Plugin Name: FluentCRM Edition Contacts
- * Description: Browse and filter FluentCRM contacts by course edition. Adds "Contacts by Edition" to FluentCRM navigation.
- * Version: 1.3.0
+ * Description: Browse and filter FluentCRM contacts by course edition. Adds "Contacts by Edition" to FluentCRM navigation. Courses are configurable via WooCommerce > Settings > Edition Contacts.
+ * Version: 1.4.0
  * Author: Shoaib Qureshi
  * Text Domain: fluentcrm-edition-contacts
  * Requires at least: 5.8
@@ -18,6 +18,11 @@ if (!defined('ABSPATH')) {
 define('FCEF_VERSION', '1.4.0');
 define('FCEF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('FCEF_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('FCEF_OPTION_KEY', 'fcef_courses_config');
+define('FCEF_MIGRATED_KEY', 'fcef_courses_migrated');
+
+// Load the WooCommerce settings tab.
+require_once FCEF_PLUGIN_DIR . 'includes/class-fcef-wc-settings.php';
 
 /**
  * Main Plugin Class
@@ -28,18 +33,28 @@ class FluentCRM_Edition_Contacts
     private static $instance = null;
 
     /**
-     * Course configuration
+     * Default course configuration (used for first-time migration only).
      */
-    private static $courses = [
+    private static $default_courses = [
         'frcophth_p1_edition' => [
             'label' => 'FRCOphth Part 1',
             'name' => 'FRCOphth Part 1',
             'category' => 'frcophth-part-1'
         ],
         'frcophth_p2_edition' => [
-            'label' => 'FRCOphth Part 2',
-            'name' => 'FRCOphth Part 2',
+            'label' => 'FRCOphth Part 2 Oral',
+            'name' => 'FRCOphth Part 2 Oral',
             'category' => 'frcophth-part-2'
+        ],
+        'frcophth_rc_edition' => [
+            'label' => 'FRCOphth Refraction Certificate',
+            'name' => 'FRCOphth Refraction Certificate',
+            'category' => 'frcophth-refraction-certificate'
+        ],
+        'frcophth_p2_written_editi' => [
+            'label' => 'FRCOphth & FRCS Ophthalmology Part 2 (Written)',
+            'name' => 'FRCOphth & FRCS Ophthalmology Part 2 (Written)',
+            'category' => 'frcopth-part-2-written'
         ],
         'frcs_edition' => [
             'label' => 'FRCS',
@@ -63,6 +78,11 @@ class FluentCRM_Edition_Contacts
         ]
     ];
 
+    /**
+     * Runtime course list (loaded from options or defaults).
+     */
+    private static $courses = null;
+
     public static function get_instance()
     {
         if (self::$instance === null) {
@@ -73,7 +93,49 @@ class FluentCRM_Edition_Contacts
 
     private function __construct()
     {
+        add_action('plugins_loaded', [$this, 'maybe_migrate_courses'], 20);
         add_action('plugins_loaded', [$this, 'init'], 30);
+    }
+
+    /**
+     * One-time migration of hardcoded courses to wp_options.
+     */
+    public function maybe_migrate_courses()
+    {
+        if (get_option(FCEF_MIGRATED_KEY)) {
+            return;
+        }
+
+        $existing = get_option(FCEF_OPTION_KEY);
+
+        if (empty($existing) || !is_array($existing)) {
+            update_option(FCEF_OPTION_KEY, self::$default_courses);
+        }
+
+        update_option(FCEF_MIGRATED_KEY, 1);
+    }
+
+    /**
+     * Get the active course list. Falls back to defaults if option data is empty.
+     */
+    public static function get_courses()
+    {
+        if (self::$courses !== null) {
+            return self::$courses;
+        }
+
+        $saved = get_option(FCEF_OPTION_KEY);
+        self::$courses = (!empty($saved) && is_array($saved)) ? $saved : self::$default_courses;
+
+        return self::$courses;
+    }
+
+    /**
+     * Force-refresh the in-memory course cache after settings save.
+     */
+    public static function refresh_courses_cache()
+    {
+        self::$courses = null;
     }
 
     public function init()
@@ -82,6 +144,11 @@ class FluentCRM_Edition_Contacts
         if (!defined('FLUENTCRM')) {
             add_action('admin_notices', [$this, 'fluentcrm_missing_notice']);
             return;
+        }
+
+        // Initialize WooCommerce settings tab (only if WC is active).
+        if (class_exists('WooCommerce')) {
+            FCEF_WC_Settings::init();
         }
 
         // Add to WordPress admin menu
@@ -173,7 +240,7 @@ class FluentCRM_Edition_Contacts
             'fluentcrm-admin',
             __('Contacts by Edition', 'fluentcrm-edition-contacts'),
             __('Contacts by Edition', 'fluentcrm-edition-contacts'),
-            'manage_options',
+            'edit_posts',
             'fluentcrm-edition-contacts',
             [$this, 'render_page'],
             2  // Position - after dashboard
@@ -197,7 +264,7 @@ class FluentCRM_Edition_Contacts
         wp_localize_script('fcef-admin', 'fcefData', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('fcef_nonce'),
-            'courses' => self::$courses,
+            'courses' => self::get_courses(),
             'fluentcrmUrl' => admin_url('admin.php?page=fluentcrm-admin#/subscribers/'),
             'adminUrl' => admin_url(),
             'currency' => function_exists('get_woocommerce_currency_symbol') ? get_woocommerce_currency_symbol() : '$'
@@ -211,9 +278,17 @@ class FluentCRM_Edition_Contacts
     {
         global $wpdb;
 
+        $courses = self::get_courses();
+
         // Special handling for Lib Sub - it has no editions, only tags
         if ($course_field === 'library_sub_edition') {
             return ['Library-Subscription'];
+        }
+
+        // Allow any course flagged as tag-based via settings to behave like Lib Sub.
+        if (isset($courses[$course_field]['type']) && $courses[$course_field]['type'] === 'tag') {
+            $tag_value = $courses[$course_field]['tag'] ?? $courses[$course_field]['name'];
+            return [$tag_value];
         }
 
         $table = $wpdb->prefix . 'fc_subscriber_meta';
@@ -288,6 +363,8 @@ class FluentCRM_Edition_Contacts
     private function get_contacts_by_edition($course_field, $edition_value, $page = 1, $per_page = 20)
     {
         global $wpdb;
+
+        $courses = self::get_courses();
 
         $meta_table = $wpdb->prefix . 'fc_subscriber_meta';
         $subscribers_table = $wpdb->prefix . 'fc_subscribers';
@@ -457,7 +534,7 @@ class FluentCRM_Edition_Contacts
         }
 
         // Get course category for order lookup
-        $category = self::$courses[$course_field]['category'] ?? '';
+        $category = $courses[$course_field]['category'] ?? '';
 
         // Enrich contacts with order data and phone
         foreach ($contacts as &$contact) {
@@ -793,12 +870,8 @@ class FluentCRM_Edition_Contacts
 
         // Get the course category from our config
         $category = '';
-        foreach (self::$courses as $field => $course) {
-            if ($field === $course_field) {
-                $category = $course['category'];
-                break;
-            }
-        }
+        $courses = self::get_courses();
+        $category = $courses[$course_field]['category'] ?? '';
 
         if (empty($category)) {
             return [
@@ -883,15 +956,136 @@ class FluentCRM_Edition_Contacts
     }
 
     /**
+     * Get product breakdown for an edition
+     */
+    private function get_edition_product_breakdown($course_field, $edition_value)
+    {
+        global $wpdb;
+
+        if (!class_exists('WooCommerce')) {
+            return [];
+        }
+
+        $category = '';
+        $courses = self::get_courses();
+        $category = $courses[$course_field]['category'] ?? '';
+
+        if (empty($category)) {
+            return [];
+        }
+
+        $is_lib_sub = ($category === 'library-subscription');
+
+        // Get order IDs for this edition
+        if (
+            class_exists('\Automattic\WooCommerce\Utilities\OrderUtil') &&
+            \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled()
+        ) {
+            $orders_table = $wpdb->prefix . 'wc_orders';
+            $meta_table = $wpdb->prefix . 'wc_orders_meta';
+
+            if ($is_lib_sub) {
+                $order_ids = $wpdb->get_col($wpdb->prepare(
+                    "SELECT DISTINCT o.id
+                     FROM $orders_table o
+                     INNER JOIN $meta_table m ON o.id = m.order_id
+                     WHERE m.meta_key LIKE %s
+                     AND o.status IN ('wc-completed', 'wc-processing')",
+                    '_edition_name_' . $category . '%'
+                ));
+            } else {
+                $order_ids = $wpdb->get_col($wpdb->prepare(
+                    "SELECT DISTINCT o.id
+                     FROM $orders_table o
+                     INNER JOIN $meta_table m ON o.id = m.order_id
+                     WHERE m.meta_key = %s AND m.meta_value = %s
+                     AND o.status IN ('wc-completed', 'wc-processing')",
+                    '_edition_name_' . $category,
+                    $edition_value
+                ));
+            }
+        } else {
+            if ($is_lib_sub) {
+                $order_ids = $wpdb->get_col($wpdb->prepare(
+                    "SELECT DISTINCT p.ID
+                     FROM {$wpdb->posts} p
+                     INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+                     WHERE p.post_type = 'shop_order'
+                     AND p.post_status IN ('wc-completed', 'wc-processing')
+                     AND pm.meta_key LIKE %s",
+                    '_edition_name_' . $category . '%'
+                ));
+            } else {
+                $order_ids = $wpdb->get_col($wpdb->prepare(
+                    "SELECT DISTINCT p.ID
+                     FROM {$wpdb->posts} p
+                     INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+                     WHERE p.post_type = 'shop_order'
+                     AND p.post_status IN ('wc-completed', 'wc-processing')
+                     AND pm.meta_key = %s AND pm.meta_value = %s",
+                    '_edition_name_' . $category,
+                    $edition_value
+                ));
+            }
+        }
+
+        if (empty($order_ids)) {
+            return [];
+        }
+
+        // Count product names and revenue across all orders
+        $product_data = [];
+        $total_revenue = 0;
+        foreach ($order_ids as $order_id) {
+            $wc_order = wc_get_order($order_id);
+            if (!$wc_order) continue;
+
+            foreach ($wc_order->get_items() as $item) {
+                $name = $item->get_name();
+                if (!isset($product_data[$name])) {
+                    $product_data[$name] = ['count' => 0, 'revenue' => 0];
+                }
+                $product_data[$name]['count']++;
+                $product_data[$name]['revenue'] += floatval($item->get_total());
+                $total_revenue += floatval($item->get_total());
+            }
+        }
+
+        // Sort by count descending
+        uasort($product_data, function($a, $b) {
+            return $b['count'] - $a['count'];
+        });
+
+        $breakdown = [];
+        foreach ($product_data as $name => $data) {
+            $pct = $total_revenue > 0 ? round(($data['revenue'] / $total_revenue) * 100, 1) : 0;
+            $breakdown[] = [
+                'name' => $name,
+                'count' => $data['count'],
+                'revenue' => $data['revenue'],
+                'percentage' => $pct
+            ];
+        }
+
+        return $breakdown;
+    }
+
+    /**
      * AJAX: Get editions
      */
     public function ajax_get_editions()
     {
         check_ajax_referer('fcef_nonce', 'nonce');
 
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Permission denied']);
+        }
+
+        $courses = self::get_courses();
+
         $course_field = sanitize_text_field($_POST['course'] ?? '');
 
-        if (empty($course_field) || !isset(self::$courses[$course_field])) {
+        if (empty($course_field) || !isset($courses[$course_field])) {
             wp_send_json_error(['message' => 'Invalid course']);
         }
 
@@ -900,7 +1094,7 @@ class FluentCRM_Edition_Contacts
         wp_send_json_success([
             'editions' => $editions,
             'course' => $course_field,
-            'course_name' => self::$courses[$course_field]['label']
+            'course_name' => $courses[$course_field]['label']
         ]);
     }
 
@@ -911,9 +1105,14 @@ class FluentCRM_Edition_Contacts
     {
         check_ajax_referer('fcef_nonce', 'nonce');
 
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Permission denied']);
+        }
+
+        $courses = self::get_courses();
         $all_editions = [];
 
-        foreach (self::$courses as $field => $course) {
+        foreach ($courses as $field => $course) {
             $editions = $this->get_editions_for_course($field);
             $edition_counts = [];
 
@@ -941,10 +1140,16 @@ class FluentCRM_Edition_Contacts
     {
         check_ajax_referer('fcef_nonce', 'nonce');
 
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Permission denied']);
+        }
+
+        $courses = self::get_courses();
+
         $course_field = sanitize_text_field($_POST['course'] ?? '');
         $edition_value = sanitize_text_field($_POST['edition'] ?? '');
 
-        if (empty($course_field) || !isset(self::$courses[$course_field])) {
+        if (empty($course_field) || !isset($courses[$course_field])) {
             wp_send_json_error(['message' => 'Invalid course']);
         }
 
@@ -985,6 +1190,9 @@ class FluentCRM_Edition_Contacts
         // Get revenue stats from WooCommerce
         $revenue_stats = $this->get_edition_revenue_stats($course_field, $edition_value);
 
+        // Get product breakdown
+        $product_breakdown = $this->get_edition_product_breakdown($course_field, $edition_value);
+
         wp_send_json_success([
             'total_contacts' => $contact_count,
             'subscribed' => intval($status_breakdown['subscribed']->count ?? 0),
@@ -992,7 +1200,8 @@ class FluentCRM_Edition_Contacts
             'unsubscribed' => intval($status_breakdown['unsubscribed']->count ?? 0),
             'total_revenue' => $revenue_stats['total_revenue'],
             'order_count' => $revenue_stats['order_count'],
-            'avg_order_value' => $revenue_stats['avg_order_value']
+            'avg_order_value' => $revenue_stats['avg_order_value'],
+            'product_breakdown' => $product_breakdown
         ]);
     }
 
@@ -1003,12 +1212,18 @@ class FluentCRM_Edition_Contacts
     {
         check_ajax_referer('fcef_nonce', 'nonce');
 
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Permission denied']);
+        }
+
+        $courses = self::get_courses();
+
         $course_field = sanitize_text_field($_POST['course'] ?? '');
         $edition_value = sanitize_text_field($_POST['edition'] ?? '');
         $page = max(1, intval($_POST['page'] ?? 1));
         $per_page = max(10, min(100, intval($_POST['per_page'] ?? 20)));
 
-        if (empty($course_field) || !isset(self::$courses[$course_field])) {
+        if (empty($course_field) || !isset($courses[$course_field])) {
             wp_send_json_error(['message' => 'Invalid course']);
         }
 
@@ -1028,10 +1243,16 @@ class FluentCRM_Edition_Contacts
     {
         check_ajax_referer('fcef_nonce', 'nonce');
 
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Permission denied']);
+        }
+
+        $courses = self::get_courses();
+
         $course_field = sanitize_text_field($_POST['course'] ?? '');
         $edition_value = sanitize_text_field($_POST['edition'] ?? '');
 
-        if (empty($course_field) || !isset(self::$courses[$course_field])) {
+        if (empty($course_field) || !isset($courses[$course_field])) {
             wp_send_json_error(['message' => 'Invalid course']);
         }
 
@@ -1085,7 +1306,7 @@ class FluentCRM_Edition_Contacts
 
         wp_send_json_success([
             'csv_data' => $csv_data,
-            'filename' => sanitize_file_name(self::$courses[$course_field]['label'] . '-' . $edition_value . '-contacts.csv')
+            'filename' => sanitize_file_name($courses[$course_field]['label'] . '-' . $edition_value . '-contacts.csv')
         ]);
     }
 
@@ -1094,6 +1315,7 @@ class FluentCRM_Edition_Contacts
      */
     public function render_page()
     {
+        $courses = self::get_courses();
 ?>
         <div class="fcef-app">
             <!-- Header -->
@@ -1111,6 +1333,16 @@ class FluentCRM_Edition_Contacts
                         <h1><?php _e('Contacts by Edition', 'fluentcrm-edition-contacts'); ?></h1>
                         <p><?php _e('Filter and browse contacts by their enrolled course edition', 'fluentcrm-edition-contacts'); ?></p>
                     </div>
+                    <?php if (current_user_can('manage_woocommerce')): ?>
+                    <div class="fcef-header-actions">
+                        <a href="<?php echo esc_url(admin_url('admin.php?page=wc-settings&tab=fcef_courses')); ?>" class="fcef-btn fcef-btn-ghost">
+                            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" style="margin-right:6px;vertical-align:middle;">
+                                <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+                            </svg>
+                            <?php _e('Manage Courses', 'fluentcrm-edition-contacts'); ?>
+                        </a>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -1122,7 +1354,7 @@ class FluentCRM_Edition_Contacts
                         <div class="fcef-select-wrap">
                             <select id="fcef-course" class="fcef-select">
                                 <option value=""><?php _e('Select Course...', 'fluentcrm-edition-contacts'); ?></option>
-                                <?php foreach (self::$courses as $field => $course): ?>
+                                <?php foreach ($courses as $field => $course): ?>
                                     <option value="<?php echo esc_attr($field); ?>"><?php echo esc_html($course['label']); ?></option>
                                 <?php endforeach; ?>
                             </select>
@@ -1275,6 +1507,25 @@ class FluentCRM_Edition_Contacts
                                 <span class="fcef-stat-value" id="stat-avg"><?php echo function_exists('get_woocommerce_currency_symbol') ? get_woocommerce_currency_symbol() : '$'; ?>0</span>
                                 <span class="fcef-stat-label"><?php _e('Avg. Order Value', 'fluentcrm-edition-contacts'); ?></span>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Product Breakdown -->
+                    <div class="fcef-product-breakdown-section">
+                        <div class="fcef-pb-header">
+                            <div class="fcef-pb-header-left">
+                                <h3 class="fcef-pb-title"><?php _e('Product Breakdown', 'fluentcrm-edition-contacts'); ?></h3>
+                                <span class="fcef-pb-subtitle"><?php _e('Course-specific performance and enrollment metrics', 'fluentcrm-edition-contacts'); ?></span>
+                            </div>
+                            <div class="fcef-pb-header-right">
+                                <div class="fcef-pb-search-wrap">
+                                    <svg class="fcef-pb-search-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
+                                    <input type="text" id="fcef-pb-search" class="fcef-pb-search" placeholder="<?php _e('Search courses...', 'fluentcrm-edition-contacts'); ?>">
+                                </div>
+                            </div>
+                        </div>
+                        <div id="fcef-product-breakdown">
+                            <p class="fcef-pb-empty"><?php _e('Select an edition to see product breakdown', 'fluentcrm-edition-contacts'); ?></p>
                         </div>
                     </div>
                 </div>

@@ -841,6 +841,210 @@
     margin-top: 2px;
 }
 
+/* Product Breakdown */
+.fcef-product-breakdown-section {
+    margin-top: 24px;
+    border-top: 1px solid var(--fc-border);
+    padding-top: 24px;
+}
+
+.fcef-pb-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.fcef-pb-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fcef-pb-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fc-text);
+    margin: 0;
+}
+
+.fcef-pb-subtitle {
+    font-size: 13px;
+    color: var(--fc-text-secondary);
+}
+
+.fcef-pb-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.fcef-pb-search-wrap {
+    position: relative;
+}
+
+.fcef-pb-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: var(--fc-text-secondary);
+    pointer-events: none;
+}
+
+.fcef-pb-search {
+    padding: 8px 12px 8px 32px;
+    border: 1px solid var(--fc-border);
+    border-radius: var(--fc-radius);
+    font-size: 13px;
+    width: 220px;
+    background: var(--fc-white);
+    color: var(--fc-text);
+    transition: border-color 0.2s;
+}
+
+.fcef-pb-search:focus {
+    outline: none;
+    border-color: var(--fc-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Product Breakdown Table */
+.fcef-pb-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid var(--fc-border);
+    border-radius: var(--fc-radius);
+    overflow: hidden;
+}
+
+.fcef-pb-table thead th {
+    background: var(--fc-bg);
+    padding: 12px 20px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--fc-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: left;
+    border-bottom: 1px solid var(--fc-border);
+}
+
+.fcef-pb-col-enrolled,
+.fcef-pb-col-revenue,
+.fcef-pb-col-share {
+    width: 120px;
+    text-align: center !important;
+}
+
+.fcef-pb-table tbody tr {
+    transition: background 0.15s;
+}
+
+.fcef-pb-table tbody tr:not(:last-child) {
+    border-bottom: 1px solid var(--fc-border);
+}
+
+.fcef-pb-table tbody tr:not(:last-child) td {
+    border-bottom: 1px solid var(--fc-border);
+}
+
+.fcef-pb-table tbody tr:hover {
+    background: var(--fc-bg);
+}
+
+.fcef-pb-cell-name {
+    padding: 16px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--fc-text);
+}
+
+.fcef-pb-cell-enrolled,
+.fcef-pb-cell-revenue,
+.fcef-pb-cell-share {
+    padding: 16px 20px;
+    font-size: 14px;
+    text-align: center;
+    color: var(--fc-text);
+}
+
+.fcef-pb-enrolled-badge {
+    display: inline-block;
+    font-weight: 700;
+    color: var(--fc-primary);
+    background: var(--fc-primary-light);
+    padding: 3px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+}
+
+.fcef-pb-cell-revenue {
+    font-weight: 600;
+}
+
+.fcef-pb-cell-share {
+    color: var(--fc-text-secondary);
+}
+
+/* Product Breakdown Footer / Pagination */
+.fcef-pb-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border: 1px solid var(--fc-border);
+    border-top: none;
+    border-radius: 0 0 var(--fc-radius) var(--fc-radius);
+    background: var(--fc-bg);
+}
+
+.fcef-pb-showing {
+    font-size: 13px;
+    color: var(--fc-text-secondary);
+}
+
+.fcef-pb-pagination {
+    display: flex;
+    gap: 8px;
+}
+
+.fcef-pb-page-btn {
+    padding: 6px 16px;
+    border: 1px solid var(--fc-border);
+    border-radius: var(--fc-radius);
+    background: var(--fc-white);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fc-text);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.fcef-pb-page-btn:hover:not(:disabled) {
+    background: var(--fc-bg);
+    border-color: var(--fc-primary);
+    color: var(--fc-primary);
+}
+
+.fcef-pb-page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.fcef-pb-empty {
+    font-size: 13px;
+    color: var(--fc-text-secondary);
+    margin: 0;
+    padding: 24px 0;
+    text-align: center;
+}
+
 /* Loading States */
 .fcef-loading-state {
     display: flex;

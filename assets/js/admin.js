@@ -25,6 +25,13 @@
             $(document).on('click', '.fcef-edition-item[data-course][data-edition]', this.onStatClick.bind(this));
             $('#fcef-export-btn').on('click', this.exportContacts.bind(this));
 
+            // Product breakdown search
+            $('#fcef-pb-search').on('input', function() {
+                FCEF.pbSearch = $(this).val().toLowerCase();
+                FCEF.pbPage = 1;
+                FCEF.renderProductBreakdown();
+            });
+
             // Copy email button
             $(document).on('click', '.fcef-copy-email', function(e) {
                 e.preventDefault();
@@ -229,8 +236,94 @@
             $('#stat-revenue').text(fcefData.currency + FCEF.formatNumber(stats.total_revenue, 2));
             $('#stat-orders').text(FCEF.formatNumber(stats.order_count));
             $('#stat-avg').text(fcefData.currency + FCEF.formatNumber(stats.avg_order_value, 2));
+
+            // Render product breakdown
+            FCEF.productBreakdownData = stats.product_breakdown || [];
+            FCEF.pbPage = 1;
+            FCEF.pbPerPage = 7;
+            FCEF.pbSearch = '';
+            $('#fcef-pb-search').val('');
+            FCEF.renderProductBreakdown();
         },
         
+        renderProductBreakdown: function() {
+            var $container = $('#fcef-product-breakdown');
+            $container.empty();
+
+            var data = this.productBreakdownData || [];
+            if (data.length === 0) {
+                $container.html('<p class="fcef-pb-empty">No products found for this edition</p>');
+                return;
+            }
+
+            // Filter by search
+            var filtered = data;
+            if (this.pbSearch) {
+                var search = this.pbSearch;
+                filtered = data.filter(function(p) {
+                    return p.name.toLowerCase().indexOf(search) !== -1;
+                });
+            }
+
+            if (filtered.length === 0) {
+                $container.html('<p class="fcef-pb-empty">No matching courses found</p>');
+                return;
+            }
+
+            var totalPages = Math.ceil(filtered.length / this.pbPerPage);
+            if (this.pbPage > totalPages) this.pbPage = totalPages;
+            var start = (this.pbPage - 1) * this.pbPerPage;
+            var pageData = filtered.slice(start, start + this.pbPerPage);
+
+            // Build table
+            var html = '<table class="fcef-pb-table">';
+            html += '<thead><tr>';
+            html += '<th class="fcef-pb-col-name">Course Name</th>';
+            html += '<th class="fcef-pb-col-enrolled">Enrolled</th>';
+            html += '<th class="fcef-pb-col-revenue">Revenue</th>';
+            html += '<th class="fcef-pb-col-share">Share</th>';
+            html += '</tr></thead>';
+            html += '<tbody>';
+
+            pageData.forEach(function(product) {
+                html += '<tr class="fcef-pb-row">';
+                html += '<td class="fcef-pb-cell-name">' + FCEF.escapeHtml(product.name) + '</td>';
+                html += '<td class="fcef-pb-cell-enrolled"><span class="fcef-pb-enrolled-badge">' + FCEF.formatNumber(product.count) + '</span></td>';
+                html += '<td class="fcef-pb-cell-revenue">' + fcefData.currency + FCEF.formatNumber(product.revenue, 2) + '</td>';
+                html += '<td class="fcef-pb-cell-share">' + product.percentage + '%</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+
+            // Pagination footer
+            html += '<div class="fcef-pb-footer">';
+            html += '<span class="fcef-pb-showing">Showing ' + (start + 1) + '-' + Math.min(start + this.pbPerPage, filtered.length) + ' of ' + filtered.length + ' courses</span>';
+            if (totalPages > 1) {
+                html += '<div class="fcef-pb-pagination">';
+                html += '<button class="fcef-pb-page-btn fcef-pb-prev" ' + (this.pbPage <= 1 ? 'disabled' : '') + '>Previous</button>';
+                html += '<button class="fcef-pb-page-btn fcef-pb-next" ' + (this.pbPage >= totalPages ? 'disabled' : '') + '>Next</button>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            $container.html(html);
+
+            // Bind pagination events
+            $container.find('.fcef-pb-prev').on('click', function() {
+                if (FCEF.pbPage > 1) {
+                    FCEF.pbPage--;
+                    FCEF.renderProductBreakdown();
+                }
+            });
+            $container.find('.fcef-pb-next').on('click', function() {
+                if (FCEF.pbPage < totalPages) {
+                    FCEF.pbPage++;
+                    FCEF.renderProductBreakdown();
+                }
+            });
+        },
+
         renderContacts: function(data) {
             var courseName = fcefData.courses[this.currentCourse]?.label || '';
             
