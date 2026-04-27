@@ -98,50 +98,45 @@ class FCEF_WC_Settings
                 </ul>
             </div>
 
-            <form method="post" id="fcef-settings-form">
-                <?php wp_nonce_field('fcef_save_courses', 'fcef_nonce'); ?>
+            <?php wp_nonce_field('fcef_save_courses', 'fcef_nonce'); ?>
 
-                <table class="wp-list-table widefat fixed striped fcef-courses-table" id="fcef-courses-table">
-                    <thead>
-                        <tr>
-                            <th class="fcef-col-handle"></th>
-                            <th><?php _e('Course Field Key', 'fluentcrm-edition-contacts'); ?> <span class="required">*</span></th>
-                            <th><?php _e('Display Label', 'fluentcrm-edition-contacts'); ?> <span class="required">*</span></th>
-                            <th><?php _e('Internal Name', 'fluentcrm-edition-contacts'); ?></th>
-                            <th><?php _e('Product Category', 'fluentcrm-edition-contacts'); ?> <span class="required">*</span></th>
-                            <th class="fcef-col-actions"><?php _e('Actions', 'fluentcrm-edition-contacts'); ?></th>
-                        </tr>
-                    </thead>
-                    <tbody id="fcef-courses-body">
-                        <?php
-                        if (empty($courses)) {
-                            self::render_course_row('', []);
-                        } else {
-                            foreach ($courses as $field => $course) {
-                                self::render_course_row($field, $course);
-                            }
-                            self::render_course_row('', []);
+            <table class="wp-list-table widefat fixed striped fcef-courses-table" id="fcef-courses-table">
+                <thead>
+                    <tr>
+                        <th class="fcef-col-handle"></th>
+                        <th><?php _e('Course Field Key', 'fluentcrm-edition-contacts'); ?> <span class="required">*</span></th>
+                        <th><?php _e('Display Label', 'fluentcrm-edition-contacts'); ?> <span class="required">*</span></th>
+                        <th><?php _e('Internal Name', 'fluentcrm-edition-contacts'); ?></th>
+                        <th><?php _e('Product Category', 'fluentcrm-edition-contacts'); ?> <span class="required">*</span></th>
+                        <th class="fcef-col-actions"><?php _e('Actions', 'fluentcrm-edition-contacts'); ?></th>
+                    </tr>
+                </thead>
+                <tbody id="fcef-courses-body">
+                    <?php
+                    if (empty($courses)) {
+                        self::render_course_row('', []);
+                    } else {
+                        foreach ($courses as $field => $course) {
+                            self::render_course_row($field, $course);
                         }
-                        ?>
-                    </tbody>
-                </table>
+                        self::render_course_row('', []);
+                    }
+                    ?>
+                </tbody>
+            </table>
 
-                <p class="fcef-add-row-wrap">
-                    <button type="button" class="button button-secondary" id="fcef-add-course">
-                        <span class="dashicons dashicons-plus-alt2" style="vertical-align: middle; margin-top: 3px;"></span>
-                        <?php _e('Add Course', 'fluentcrm-edition-contacts'); ?>
-                    </button>
-                </p>
+            <p class="fcef-add-row-wrap">
+                <button type="button" class="button button-secondary" id="fcef-add-course">
+                    <span class="dashicons dashicons-plus-alt2" style="vertical-align: middle; margin-top: 3px;"></span>
+                    <?php _e('Add Course', 'fluentcrm-edition-contacts'); ?>
+                </button>
+            </p>
 
-                <p class="submit">
-                    <button type="submit" name="fcef_save" value="1" class="button button-primary button-large">
-                        <?php _e('Save Changes', 'fluentcrm-edition-contacts'); ?>
-                    </button>
-                    <a href="<?php echo esc_url(admin_url('admin.php?page=fluentcrm-edition-contacts')); ?>" class="button button-secondary">
-                        <?php _e('Go to Contacts by Edition', 'fluentcrm-edition-contacts'); ?>
-                    </a>
-                </p>
-            </form>
+            <p class="fcef-extra-actions">
+                <a href="<?php echo esc_url(admin_url('admin.php?page=fluentcrm-edition-contacts')); ?>" class="button button-secondary">
+                    <?php _e('Go to Contacts by Edition', 'fluentcrm-edition-contacts'); ?>
+                </a>
+            </p>
 
             <script type="text/template" id="fcef-row-template">
                 <?php self::render_course_row('', [], true); ?>
@@ -494,7 +489,7 @@ class FCEF_WC_Settings
                 setTimeout(function() { $row.remove(); }, 150);
             });
 
-            $('#fcef-settings-form').on('submit', function() {
+            $('#mainform').on('submit', function() {
                 $body.find('tr.fcef-course-row:not(.fcef-template-row):not(.fcef-row-removing)').each(function(i) {
                     $(this).find('input, select').each(function() {
                         var name = $(this).attr('name') || '';
