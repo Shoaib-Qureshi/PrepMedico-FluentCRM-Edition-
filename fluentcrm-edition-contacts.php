@@ -3,7 +3,7 @@
 /**
  * Plugin Name: FluentCRM Edition Contacts
  * Description: Browse and filter FluentCRM contacts by course edition. Adds "Contacts by Edition" to FluentCRM navigation. Courses are configurable via WooCommerce > Settings > Edition Contacts.
- * Version: 1.4.2
+ * Version: 1.4.3
  * Author: Shoaib Qureshi
  * Text Domain: fluentcrm-edition-contacts
  * Requires at least: 5.8
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('FCEF_VERSION', '1.4.2');
+define('FCEF_VERSION', '1.4.3');
 define('FCEF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('FCEF_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('FCEF_OPTION_KEY', 'fcef_courses_config');

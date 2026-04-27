@@ -120,6 +120,7 @@ class FCEF_WC_Settings
                             foreach ($courses as $field => $course) {
                                 self::render_course_row($field, $course);
                             }
+                            self::render_course_row('', []);
                         }
                         ?>
                     </tbody>
@@ -411,52 +412,60 @@ class FCEF_WC_Settings
 
                 $context.find('.fcef-field-select').each(function() {
                     var $select = $(this);
-                    if ($select.data('select2')) {
+                    if ($select.data('select2') || $select.data('selectWoo')) {
                         return;
                     }
 
-                    $select.selectWoo({
-                        width: '100%',
-                        placeholder: $select.data('placeholder') || 'Search or add a field key',
-                        allowClear: true,
-                        tags: true,
-                        createTag: function(params) {
-                            var term = $.trim(params.term);
-                            if (!term) {
-                                return null;
-                            }
+                    try {
+                        $select.selectWoo({
+                            width: '100%',
+                            placeholder: $select.data('placeholder') || 'Search or add a field key',
+                            allowClear: true,
+                            tags: true,
+                            createTag: function(params) {
+                                var term = $.trim(params.term);
+                                if (!term) {
+                                    return null;
+                                }
 
-                            term = term.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
-                            if (!term) {
-                                return null;
-                            }
+                                term = term.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+                                if (!term) {
+                                    return null;
+                                }
 
-                            return {
-                                id: term,
-                                text: term,
-                                newTag: true
-                            };
-                        }
-                    });
+                                return {
+                                    id: term,
+                                    text: term,
+                                    newTag: true
+                                };
+                            }
+                        });
+                    } catch (error) {
+                        $select.addClass('fcef-selectwoo-failed');
+                    }
                 });
 
                 $context.find('.fcef-category-select').each(function() {
                     var $select = $(this);
-                    if ($select.data('select2')) {
+                    if ($select.data('select2') || $select.data('selectWoo')) {
                         return;
                     }
 
-                    $select.selectWoo({
-                        width: '100%',
-                        placeholder: $select.data('placeholder') || 'Search WooCommerce categories',
-                        allowClear: true
-                    });
+                    try {
+                        $select.selectWoo({
+                            width: '100%',
+                            placeholder: $select.data('placeholder') || 'Search WooCommerce categories',
+                            allowClear: true
+                        });
+                    } catch (error) {
+                        $select.addClass('fcef-selectwoo-failed');
+                    }
                 });
             }
 
             initSearchSelects($(document));
 
-            $('#fcef-add-course').on('click', function(e) {
+            $(document).on('click', '#fcef-add-course', function(e) {
                 e.preventDefault();
                 if (!$template.length) return;
 
@@ -466,7 +475,9 @@ class FCEF_WC_Settings
                 $newRow.find('input, select').prop('disabled', false).val('');
                 $body.append($newRow);
                 initSearchSelects($newRow);
-                $newRow.find('select, input').first().focus();
+                setTimeout(function() {
+                    $newRow.find('select, input').first().focus();
+                }, 0);
             });
 
             $body.on('click', '.fcef-remove-row', function(e) {
