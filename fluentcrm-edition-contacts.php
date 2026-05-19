@@ -549,6 +549,10 @@ class FluentCRM_Edition_Contacts
             $contact->order_count = $order_data['order_count'] ?? 0;
             $contact->is_asit_member = $order_data['is_asit_member'] ?? false;
             $contact->asit_number = $order_data['asit_number'] ?? '';
+            $contact->partner_slug = $order_data['partner_slug'] ?? '';
+            $contact->partner_label = $order_data['partner_label'] ?? '';
+            $contact->partner_number = $order_data['partner_number'] ?? '';
+            $contact->partner_discount = $order_data['partner_discount'] ?? 0;
             $contact->all_product_names = $order_data['all_product_names'] ?? '';
 
             // WooCommerce order meta fields
@@ -566,6 +570,15 @@ class FluentCRM_Edition_Contacts
     }
 
     /**
+     * Get partner label from slug.
+     */
+    private static function get_partner_label($slug)
+    {
+        $labels = ['asit' => 'ASiT', 'bomss' => 'BOMSS', 'rouleaux' => 'Rouleaux Club'];
+        return isset($labels[$slug]) ? $labels[$slug] : '';
+    }
+
+    /**
      * Get order data for a contact
      */
     private function get_contact_order_data($email, $category, $edition_value)
@@ -580,6 +593,10 @@ class FluentCRM_Edition_Contacts
             'order_count' => 0,
             'is_asit_member' => false,
             'asit_number' => '',
+            'partner_slug' => '',
+            'partner_label' => '',
+            'partner_number' => '',
+            'partner_discount' => 0,
             'all_product_names' => '',
             'specialities' => '',
             'exam_date' => '',
@@ -720,6 +737,9 @@ class FluentCRM_Edition_Contacts
         $order_count = count($orders);
         $is_asit_member = false;
         $asit_number = '';
+        $partner_slug = '';
+        $partner_number = '';
+        $partner_discount = 0;
 
         // WooCommerce order meta fields (get from most recent order)
         $specialities = '';
@@ -747,7 +767,7 @@ class FluentCRM_Edition_Contacts
                     $product_names[] = $item->get_name();
                 }
 
-                // Check if ASiT membership number exists on this order
+                // Check if ASiT membership number exists on this order (legacy keys)
                 if (!$is_asit_member) {
                     $found_asit_number = $wc_order->get_meta('_asit_membership_number');
                     if (empty($found_asit_number)) {
@@ -756,6 +776,36 @@ class FluentCRM_Edition_Contacts
                     if (!empty($found_asit_number)) {
                         $is_asit_member = true;
                         $asit_number = $found_asit_number;
+                    }
+                }
+
+                // Unified partner system (_pmcm_academic_partner / _wcem_partner)
+                if (empty($partner_slug)) {
+                    $found_partner = $wc_order->get_meta('_pmcm_academic_partner');
+                    if (empty($found_partner)) {
+                        $found_partner = $wc_order->get_meta('_wcem_partner');
+                    }
+                    if (!empty($found_partner)) {
+                        $partner_slug = $found_partner;
+                        $partner_number = $wc_order->get_meta('_pmcm_partner_number');
+                        if (empty($partner_number)) {
+                            $partner_number = $wc_order->get_meta('_wcem_partner_number');
+                        }
+                        // ASiT via unified system — keep backwards compat
+                        if ($partner_slug === 'asit' && !$is_asit_member) {
+                            $is_asit_member = true;
+                            $asit_number = $partner_number;
+                        }
+                    }
+                }
+
+                // Partner discount: fee-based (new) or coupon total (legacy)
+                if ($partner_discount <= 0) {
+                    foreach ($wc_order->get_fees() as $fee) {
+                        if (stripos($fee->get_name(), 'Member Discount') !== false) {
+                            $partner_discount = abs($fee->get_total());
+                            break;
+                        }
                     }
                 }
 
@@ -779,6 +829,11 @@ class FluentCRM_Edition_Contacts
                     }
                 }
             }
+        }
+
+        // Fallback: legacy coupon-based discount total (for orders before fee approach)
+        if ($partner_discount <= 0 && !empty($partner_slug)) {
+            $partner_discount = (float) (isset($orders[0]) ? 0 : 0); // reset — use per-order coupon below
         }
 
         // Format product name display
@@ -811,6 +866,10 @@ class FluentCRM_Edition_Contacts
             'total_items' => $total_items,
             'is_asit_member' => $is_asit_member,
             'asit_number' => $asit_number,
+            'partner_slug' => $partner_slug,
+            'partner_label' => self::get_partner_label($partner_slug),
+            'partner_number' => $partner_number,
+            'partner_discount' => $partner_discount,
             'all_product_names' => implode(', ', $product_names),
             'specialities' => $specialities,
             'exam_date' => $exam_date,
@@ -1279,6 +1338,9 @@ class FluentCRM_Edition_Contacts
             'Specialities',
             'Exam Date',
             'ASiT Member No.',
+            'Partner',
+            'Partner Member No.',
+            'Partner Discount',
             'Added Date'
         ];
 
@@ -1289,6 +1351,7 @@ class FluentCRM_Edition_Contacts
                 $full_name = 'No Name';
             }
 
+            $partner_discount_val = !empty($contact->partner_discount) ? number_format((float) $contact->partner_discount, 2) : '';
             $csv_data[] = [
                 $full_name,
                 $contact->email ?? '',
@@ -1300,6 +1363,9 @@ class FluentCRM_Edition_Contacts
                 $contact->specialities ?? '',
                 $contact->exam_date ?? '',
                 $contact->asit_number ?? '',
+                $contact->partner_label ?? '',
+                $contact->partner_number ?? '',
+                $partner_discount_val,
                 $contact->created_at ? date('Y-m-d', strtotime($contact->created_at)) : ''
             ];
         }

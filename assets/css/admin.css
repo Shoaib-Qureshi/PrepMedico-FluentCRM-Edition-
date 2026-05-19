@@ -656,7 +656,7 @@
     align-items: center;
 }
 
-/* ASiT Member Badge */
+/* ASiT Member Badge (legacy class — kept for backward compat) */
 .fcef-asit-badge {
     display: inline-flex;
     align-items: center;
@@ -670,6 +670,23 @@
     background: linear-gradient(135deg, #8d2063, #442e8c);
     border-radius: 4px;
 }
+
+/* Partner Badges (ASiT / BOMSS / Rouleaux Club) */
+.fcef-partner-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 4px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #fff;
+    border-radius: 4px;
+}
+.fcef-badge-asit    { background: linear-gradient(135deg, #8d2063, #442e8c); }
+.fcef-badge-bomss   { background: #1a6b3c; }
+.fcef-badge-rouleaux { background: #1565c0; }
 
 /* Status Badge in Table */
 .fcef-status {

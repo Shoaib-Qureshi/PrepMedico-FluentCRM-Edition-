@@ -365,9 +365,24 @@
                 row += '<div class="fcef-contact-email-row">';
                 row += '<span class="fcef-contact-email">' + FCEF.escapeHtml(contact.email) + '</span>';
                 row += '</div>';
-                // ASiT Member badge
-                if (contact.is_asit_member) {
-                    row += '<span class="fcef-asit-badge">ASiT Member</span>';
+                // Partner badge (ASiT / BOMSS / Rouleaux Club) with optional discount amount
+                var partnerBadgeLabel = '';
+                var partnerBadgeClass = '';
+                if (contact.is_asit_member || contact.partner_slug === 'asit') {
+                    partnerBadgeLabel = 'ASiT Member';
+                    partnerBadgeClass = 'fcef-badge-asit';
+                } else if (contact.partner_slug === 'bomss') {
+                    partnerBadgeLabel = 'BOMSS Member';
+                    partnerBadgeClass = 'fcef-badge-bomss';
+                } else if (contact.partner_slug === 'rouleaux') {
+                    partnerBadgeLabel = 'Rouleaux Club';
+                    partnerBadgeClass = 'fcef-badge-rouleaux';
+                }
+                if (partnerBadgeLabel) {
+                    var discountText = (contact.partner_discount > 0)
+                        ? ' <small style="opacity:0.85">(-' + fcefData.currency + parseFloat(contact.partner_discount).toFixed(2) + ')</small>'
+                        : '';
+                    row += '<span class="fcef-partner-badge ' + partnerBadgeClass + '">' + partnerBadgeLabel + discountText + '</span>';
                 }
                 row += '</div>';
                 row += '</a>';
